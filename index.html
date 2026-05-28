@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beauty Studio Чернігів | Запис</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <nav>
+        <div class="container navbar">
+            <a href="#" class="logo">BEAUTY<span>LUX</span></a>
+            <ul>
+                <li><a href="#about">Про мене</a></li>
+                <li><a href="portfolio.html">Мої роботи</a></li>
+                <li><a href="#booking">Записатися</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <section id="about" class="container section">
+        <div class="about-flex">
+            <div class="about-photo-container">
+                <img src="master.jpg" class="about-avatar" alt="Майстер">
+            </div>
+            <div class="about-text">
+                <h2>Привіт, я твоя фея краси ✨</h2>
+                <p>Я майстер з манікюру та починаючий лешмейкер. Працюю тільки у <strong>м. Чернігів</strong>. Моя задача — зробити ваші нігті та вії ідеальними!</p>
+                <p>Чекаю вас на процедури. Для запису оберіть зручний час нижче.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="booking" class="container section">
+        <div class="booking-card">
+            <h2 class="section-title">Онлайн запис</h2>
+            <form id="orderForm">
+                <input type="text" id="userName" placeholder="Ваше ім'я" required>
+                <input type="tel" id="userPhone" placeholder="Номер телефону" required>
+                
+                <label style="display:block; margin-top:10px;">Оберіть вільний час:</label>
+                <select id="slotSelect" required>
+                    <option value="">Завантаження вільних вікон...</option>
+                </select>
+
+                <select id="serviceType" style="margin-top:10px;">
+                    <option value="Манікюр">Манікюр</option>
+                    <option value="Нарощування вій">Нарощування вій</option>
+                </select>
+
+                <button type="submit" class="btn-main" id="submitBtn">Підтвердити запис</button>
+            </form>
+        </div>
+    </section>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // Твої дані Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyCuFAkPdVaB89QfL3m5ZGJIMjDFl0QhwtY",
+            authDomain: "beauty-site-99dd0.firebaseapp.com",
+            projectId: "beauty-site-99dd0",
+            storageBucket: "beauty-site-99dd0.firebasestorage.app",
+            messagingSenderId: "132637817657",
+            appId: "1:132637817657:web:a82d8611a81098776a86e8"
+        };
+
+        // Твої дані Telegram (ВСТАВ СВОЇ)
+        const TELEGRAM_TOKEN = '8705348151:AAGKnCwOBwy4G-foEhuVtB5DYBQdF2bSUjw';
+        const TELEGRAM_CHAT_ID = '1300663159';
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // 1. Функція завантаження вільних слотів
+        async function loadSlots() {
+            const select = document.getElementById('slotSelect');
+            try {
+                const q = query(collection(db, "slots"), where("isBooked", "==", false));
+                const snap = await getDocs(q);
+                
+                select.innerHTML = '<option value="">-- Оберіть зручний час --</option>';
+                snap.forEach(documentSnapshot => {
+                    const s = documentSnapshot.data();
+                    const date = new Date(s.datetime).toLocaleString('uk-UA', { day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' });
+                    select.innerHTML += `<option value="${documentSnapshot.id}" data-time="${s.datetime}">${date}</option>`;
+                });
+            } catch (err) {
+                console.error("Помилка завантаження слотів:", err);
+                select.innerHTML = '<option value="">Помилка завантаження часу</option>';
+            }
+        }
+        loadSlots();
+
+        // 2. Функція відправки в Telegram
+        async function sendTelegramNotification(bookingData) {
+            const text = `🌸 **Новий запис на процедуру!**\n\n👤 Клієнт: ${bookingData.name}\n📞 Тел: ${bookingData.phone}\n💅 Послуга: ${bookingData.service}\n⏰ Час: ${bookingData.time.replace('T', ' ')}`;
+            const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`;
+            
+            try {
+                await fetch(url);
+            } catch (err) {
+                console.error("Telegram error:", err);
+            }
+        }
+
+        // 3. Обробка форми запису
+        document.getElementById('orderForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const slotSelect = document.getElementById('slotSelect');
+            const slotId = slotSelect.value;
+            const selectedOption = slotSelect.options[slotSelect.selectedIndex];
+            const slotTime = selectedOption.getAttribute('data-time');
+
+            if (!slotId) return alert("Будь ласка, оберіть час!");
+            btn.disabled = true;
+            btn.innerText = "Обробка...";
+
+            try {
+                const name = document.getElementById('userName').value;
+                const phone = document.getElementById('userPhone').value;
+                const service = document.getElementById('serviceType').value;
+
+                // Крок А: Зберігаємо запис у Firebase
+                await addDoc(collection(db, "bookings"), {
+                    name: name,
+                    phone: phone,
+                    service: service,
+                    time: slotTime,
+                    createdAt: new Date()
+                });
+
+                // Крок Б: Оновлюємо статус слота на "зайнято"
+                await updateDoc(doc(db, "slots", slotId), { isBooked: true });
+
+                // Крок В: Відправляємо сповіщення в Telegram
+                await sendTelegramNotification({ name, phone, service, time: slotTime });
+
+                alert("Дякую! Ви записані. Я зателефоную для підтвердження.");
+                e.target.reset();
+                loadSlots(); // Оновлюємо список вікон
+            } catch (err) {
+                console.error(err);
+                alert("Помилка при записі. Спробуйте ще раз.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Підтвердити запис";
+            }
+        };
+    </script>
+</body>
+</html>

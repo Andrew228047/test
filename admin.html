@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Адмін-панель</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-card { background: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .slot-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px dotted #ccc; }
+    </style>
+</head>
+<body style="background: #f0f2f5; padding: 20px;">
+    <div class="container">
+        <h1>Панель керування 🛠</h1>
+
+        <div class="admin-card">
+            <h3>Додати вільний час</h3>
+            <input type="datetime-local" id="newSlotTime">
+            <button class="btn-main" onclick="addSlot()">Додати слот</button>
+        </div>
+
+        <div class="admin-card">
+            <h3>Хто записався</h3>
+            <div id="bookingsList">Завантаження...</div>
+        </div>
+
+        <div class="admin-card">
+            <h3>Твій розклад</h3>
+            <div id="slotsList">Завантаження...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCuFAkPdVaB89QfL3m5ZGJIMjDFl0QhwtY",
+            authDomain: "beauty-site-99dd0.firebaseapp.com",
+            projectId: "beauty-site-99dd0",
+            storageBucket: "beauty-site-99dd0.firebasestorage.app",
+            messagingSenderId: "132637817657",
+            appId: "1:132637817657:web:a82d8611a81098776a86e8"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Додати вільний час
+        window.addSlot = async () => {
+            const time = document.getElementById('newSlotTime').value;
+            if(!time) return alert("Обери час");
+            await addDoc(collection(db, "slots"), { datetime: time, isBooked: false });
+            alert("Додано!");
+            location.reload();
+        };
+
+        // Завантажити записи клієнтів
+        async function loadAdminData() {
+            // Записи
+            const bSnap = await getDocs(query(collection(db, "bookings"), orderBy("createdAt", "desc")));
+            const bList = document.getElementById('bookingsList');
+            bList.innerHTML = "";
+            bSnap.forEach(d => {
+                const b = d.data();
+                bList.innerHTML += `<div class="slot-item"><span><strong>${b.name}</strong> (${b.phone})<br>${b.service} - ${b.time.replace('T', ' ')}</span></div>`;
+            });
+
+            // Слоти
+            const sSnap = await getDocs(query(collection(db, "slots"), orderBy("datetime", "asc")));
+            const sList = document.getElementById('slotsList');
+            sList.innerHTML = "";
+            sSnap.forEach(d => {
+                const s = d.data();
+                const status = s.isBooked ? "🔴 ЗАБРОНЬОВАНО" : "🟢 Вільно";
+                sList.innerHTML += `<div class="slot-item"><span>${s.datetime.replace('T', ' ')} - ${status}</span> <button onclick="deleteSlot('${d.id}')">❌</button></div>`;
+            });
+        }
+
+        window.deleteSlot = async (id) => {
+            if(confirm("Видалити цей час?")) {
+                await deleteDoc(doc(db, "slots", id));
+                location.reload();
+            }
+        };
+
+        loadAdminData();
+    </script>
+</body>
+</html>
